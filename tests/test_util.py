@@ -1,7 +1,7 @@
 import attr
 import pytest
 
-from labgrid.util import diff_dict, flat_dict, filter_dict
+from labgrid.util import diff_dict, flat_dict, filter_dict, find_dict
 
 def test_diff_dict():
     dict_a = {"a": 1,
@@ -41,3 +41,12 @@ def test_filter_dict():
     assert str(record[1].message) == "unsupported attribute 'baz' with value '3' for class 'A'"
     assert d_filtered is not d_orig
     assert d_filtered == {'foo': 1}
+
+def test_find_dict():
+    dict_a = {"a":{"a.a":{"a.a.a":"a.a.a_val"}},"b":"b_val"}
+    assert find_dict(dict_a,"b") == "b_val"
+    assert find_dict(dict_a,"a") == {"a.a":{"a.a.a":"a.a.a_val"}}
+    assert find_dict(dict_a,"a.a") == {"a.a.a":"a.a.a_val"}
+    assert find_dict(dict_a,"a.a.a") == "a.a.a_val"
+    assert find_dict(dict_a,"x") == None
+
