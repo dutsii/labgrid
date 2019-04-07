@@ -10,7 +10,7 @@ from .shellstrategy import ShellStrategy, Status
 @attr.s(cmp=False)
 class DockerShellStrategy(ShellStrategy):
     """
-    The DockerShellStrategy is a shellstrategy for docker containers.
+    The DockerShellStrategy is a shell strategy for docker containers.
     The strategy controls a docker container by using the bound docker driver
     instance.
     """
@@ -34,6 +34,7 @@ class DockerShellStrategy(ShellStrategy):
         elif status == Status.off:
             self.target.activate(self.docker_driver)
             self.docker_driver.off()
+            self.target.deactivate(self.docker_driver)
         else:
             raise StrategyError(
                 "no transition found from {} to {}".
