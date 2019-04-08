@@ -6,36 +6,34 @@ Test what?
   * The example from .../example/docker/test_shell.py
   * The cycle() method.
   *
+  * Two calls to docker module must be mocked:
+  *   * resource/docker.py:40:docker.DockerClient
+  *   * driver/dockerdriver.py:74:docker.DockerClient
+  * Besides calls to the created [docker]_client must be mocked:
+      * resource/docker.py:53:      .base_url
+      * resource/docker.py:54:      .containers()
+      * resource/docker.py:59:      .remove_container()
+      * resource/docker.py:113:     .containers()
+      * driver/dockerdriver.py:77:  .create_container()
+      * driver/dockerdriver.py:86:  .create_host_config()
+      * driver/dockerdriver.py:91:  .remove_container()
+      * driver/dockerdriver.py:98:  .start()
+      * driver/dockerdriver.py:102: .stop()
+  * Finally we should probably fake that SSHDriver can work as expected
+  * - or at least the discovery of the NetworkService that it depends on.
+  * Therefore also mock:
+      * socket.connect()
 """
 
-
-
 import pytest
+import docker_yaml
 
-from labgrid.driver import DockerDriver
 from labgrid import Environment
 
 @pytest.fixture(scope='session')
 def docker_env(tmp_path_factory):
     p = tmp_path_factory.mktemp("docker") / "config.yaml"
-    p.write_text(
-        """
-        targets:
-          main:
-            resources:
-              - DockerDaemon:
-                  docker_daemon_url: "unix:///var/run/docker.sock"
-            drivers:
-              - DockerDriver:
-                  image_uri: "rastasheep/ubuntu-sshd:16.04"
-                  container_name: "ubuntu-lg-example"
-                  host_config: {"network_mode":"bridge"}
-                  network_services: [{"port":22,"username":"root","password":"root"}]
-              - DockerShellStrategy: {}
-              - SSHDriver:
-                  keyfile: ""
-        """
-    )
+    p.write_text(docker_yaml.yaml_all)
     return Environment(str(p))
 
 @pytest.fixture(scope='session')
@@ -49,6 +47,28 @@ def command(docker_target):
     shell = docker_target.get_driver('CommandProtocol')
     yield shell
     strategy.transition("off")
+
+#def test_create_driver_fail_missing_docker_daemon(self, target):
+#    """target does not contain any DockerDaemon instance - and so creation must fail"""
+#    with pytest.raises(NoResourceFoundError):
+#        DockerDriver(target, "ssh")
+
+#def test_create_driver(self, target):
+#    """target does not contain any DockerDaemon instance - and so creation must fail"""
+#    with pytest.raises(NoResourceFoundError):
+#        DockerDriver(target, "ssh")
+
+#def test_activate_driver(self, target):
+#    """target does not contain any DockerDaemon instance - and so creation must fail"""
+#    with pytest.raises(NoResourceFoundError):
+#        DockerDriver(target, "ssh")
+
+#def test_driver_set_on(self, target):
+#    """target does not contain any DockerDaemon instance - and so creation must fail"""
+#    with pytest.raises(NoResourceFoundError):
+#        DockerDriver(target, "ssh")
+
+
 
 def test_shell(command):
     stdout, stderr, returncode = command.run('cat /proc/version')
