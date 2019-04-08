@@ -134,5 +134,5 @@ class DockerDaemon(ManagedResource):
             return False
         s.shutdown(socket.SHUT_RDWR)
         s.close()
-        self.log.debug("Socket connect successfull {}:{}".format(address, port))
+        self.log.debug("Socket connect successful {}:{}".format(address, port))
         return True

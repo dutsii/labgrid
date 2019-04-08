@@ -1373,7 +1373,7 @@ docker container.
 | https://docker-py.readthedocs.io/en/stable/containers.html#container-objects
 
 Binds to:
-  port:
+  docker_daemon:
     - `DockerDaemon`_
 
 Implements:
@@ -1385,14 +1385,19 @@ Implements:
      image_uri: "rastasheep/ubuntu-sshd:16.04"
      container_name: "ubuntu-lg-example"
      host_config: {"network_mode":"bridge"}
+     network_services: [{"port":22,"username":"root","password":"root"}]
 
 Arguments:
   - image_uri (str): identifier of the docker image to use (may have a tag suffix)
-  - command (str): the command to run in the container
-  - volumes (list): a list to configure volumes mounted inside the container
-  - container_name (str): the name of the container
-  - environment (list): a list of environment variables
-  - host_config (dict): a dictionary of host configurations
+  - command (str): command to run in the container (optional, depends on image)
+  - volumes (list): list to configure volumes mounted inside the container (optional)
+  - container_name (str): name of the container
+  - environment (list): list of environment variables (optional)
+  - host_config (dict): dictionary of host configurations
+  - network_services (list): dictionaries that describe individual `NetworkService`_
+    instances that come alive when the container is created. The "address" argument
+    which `NetworkService`_ also requires will be derived automatically upon container
+    creation.
 
 Strategies
 ----------
@@ -1474,7 +1479,7 @@ A DockerShellStrategy has three states:
 - shell
 
 
-to transition to the shell state:
+To transition to the shell state:
 
 ::
 
@@ -1483,8 +1488,14 @@ to transition to the shell state:
    s.transition("shell")
 
 
-these commands would activate the docker driver which creates a docker container,
-and starts the container which could make it available for ssh access etc.
+These commands would activate the docker driver which creates and starts
+a docker container. This will subsequently make `NetworkService`_ instance(s)
+available which can be used for e.g. ssh access.
+
+Note: Transitioning to the "off" state will make any `NetworkService`_
+instance(s) unresponsive - which may in turn invalidate ssh connection
+sharing. Therefore, during automated test suites, refrain from transitioning
+to the "off" state.
 
 Reporters
 ---------

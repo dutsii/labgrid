@@ -37,7 +37,7 @@ class DockerDriver(PowerProtocol, Driver):
         network_services (list): Sequence of dicts each specifying a network \
                                  service that the docker container exposes.
     """
-    bindings = {"docker_host": {DockerDaemon}}
+    bindings = {"docker_daemon": {DockerDaemon}}
     image_uri = attr.ib(default=None, validator=attr.validators.optional(
         attr.validators.instance_of(str)))
     command = attr.ib(default=None, validator=attr.validators.optional(
@@ -72,7 +72,7 @@ class DockerDriver(PowerProtocol, Driver):
         """
         import docker
         self._client = docker.DockerClient(
-            base_url=self.docker_host.docker_daemon_url)
+            base_url=self.docker_daemon.docker_daemon_url)
         self._client.images.pull(self.image_uri)
         self._container = self._client.api.create_container(
             self.image_uri,
