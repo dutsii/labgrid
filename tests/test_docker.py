@@ -6,6 +6,16 @@ from labgrid.resource.docker import DockerConstants
 from labgrid.exceptions import NoResourceFoundError
 
 
+def check_daemon_presence():
+    try:
+        import docker
+        dock = docker.from_env()
+        dock.info()
+    except OSError:
+        return False
+    return True
+
+
 @pytest.fixture
 def docker_env(tmp_path_factory):
     p = tmp_path_factory.mktemp("docker") / "config.yaml"
@@ -46,7 +56,11 @@ def command(docker_target):
     strategy.transition("off")
 
 
-def test_shell(command):
+# test_docker_with_daemon tests the docker machine when a real docker daemon is running.
+# If not it is skipped. The test also makes use of other parts of labgrid - especially
+# the SSHDriver.
+@pytest.mark.skipif(not check_daemon_presence(), reason="No access to a docker daemon")
+def test_docker_with_daemon(command):
     stdout, stderr, returncode = command.run('cat /proc/version')
     assert returncode == 0
     assert len(stdout) > 0
@@ -58,14 +72,15 @@ def test_shell(command):
     assert len(stdout) == 0
     assert len(stderr) == 0
 
-
+# Just a very basic test for proper failure on illegal configuration.
 def test_create_driver_fail_missing_docker_daemon(target):
     """The test target does not contain any DockerDaemon instance - and so creation must fail"""
     with pytest.raises(NoResourceFoundError):
         DockerDriver(target, "docker_driver")
 
-
-def test_driver_without_daemon(docker_env, mocker):
+# This test simulates actions in test_docker_with_daemon, but with mocks inserted for
+# operations provided by the python docker module, the python socket module - and time.
+def test_docker_without_daemon(docker_env, mocker):
     """Test as many aspects as possible of DockerDriver, DockerDaemon, DockerManager
     and DockerShellStrategy without using an actual docker daemon, real sockets of system time"""
 
