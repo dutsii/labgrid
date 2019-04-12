@@ -31,8 +31,8 @@ class DockerManager(ResourceManager):
 
     def on_resource_added(self, resource):
         """
-        If the resource added is a DockerDaemon make sure this is the only one added for this target. If it is
-        create a docker client to be used to communicate with the docker daemon.
+        If the resource added is a DockerDaemon, make sure this is the only one added for this target.
+        If it is, create a docker client to be used to communicate with the docker daemon.
         """
         import docker  # lazy import!
         if resource.target.name in self._client:
