@@ -58,6 +58,7 @@ def env_with_docker_shell_strategy(tmp_path_factory, mocker):
     time_monotonic.side_effect = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
 
     p = tmp_path_factory.mktemp("docker") / "config.yaml"
+    # TODO-ANGA: No need for using a yaml file with the SSHDriver
     p.write_text(docker_yaml.yaml_all)
     return Environment(str(p))
 
@@ -109,18 +110,11 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     docker_client.api = api_client_class.return_value
     api_client = docker_client.api
     api_client.base_url = "unix:///var/run/docker.sock"
+    # First, empty, list is delivered by ...api.containers() when DockerDaemon tries
+    # to clean up old containers. Second, one-item, list is delivered by ...api.containers()
+    # that is part of DockerDaemon::update_resources() - it is cached for future use; therefore
+    # no need to replicate it.
     api_client.containers.side_effect = [
-        #{'NetworkSettings': {'IPAddress': '1.1.1.1'}, 'Labels': DockerConstants.DOCKER_LG_CLEANUP_LABEL},
-        #{'NetworkSettings': {'IPAddress': '1.1.1.1'}, 'Labels': DockerConstants.DOCKER_LG_CLEANUP_LABEL},
-        #[{'Labels': DockerConstants.DOCKER_LG_CLEANUP_LABEL}],
-        # [{'Labels': {DockerConstants.DOCKER_LG_CLEANUP_LABEL: DockerConstants.DOCKER_LG_CLEANUP_TYPE_AUTO},
-        #   #'NetworkSettings': {'IPAddress': '1.1.1.1'},
-        #   'Names': 'left-over',
-        #   'Id': '42'}],
-        # [{'Labels': {DockerConstants.DOCKER_LG_CLEANUP_LABEL: DockerConstants.DOCKER_LG_CLEANUP_TYPE_AUTO},
-        #   #'NetworkSettings': {'IPAddress': '1.1.1.1'},
-        #   'Names': 'left-over',
-        #   'Id': '42'}],
         [],
         [{'Labels': {DockerConstants.DOCKER_LG_CLEANUP_LABEL: DockerConstants.DOCKER_LG_CLEANUP_TYPE_AUTO},
           'NetworkSettings': {'IPAddress': '2.1.1.1'},
@@ -131,24 +125,20 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
 
     # Mock actions on the imported "socket" python module
     socket_create_connection = mocker.patch('socket.create_connection')
-
     sock = mocker.MagicMock()
-    # TODO-ANGA: This ought be the right way to handle socket creation, but it doesn't work
-    # socket_create_connection.side_effect = [Exception('No connection on first call'),
-    #                                        Exception('No connection on second call'),
-    #                                        sock]
-    # TODO-ANGA: Instead just let socket creation succeed
-    socket_create_connection.return_value = sock
-
-    # TODO-ANGA: Do we actually use this mock for anything? Probably not
-    mocker.patch('labgrid.driver.SSHDriver', autospec=True)
-
+    # First two negative connection setup attempts are used at initial resource setup during
+    # strategy.transition("shell"); these simulate that it takes time for the docker container
+    # to come up. The final, successful, return value is delivered when t.update_resources()
+    # is called explicitly later on.
+    socket_create_connection.side_effect = [Exception('No connection on first call'),
+                                            Exception('No connection on second call'),
+                                            sock]
 
     # get_target() - which calls make_target() - creates resources/drivers from .yaml configured
-    # environment. Creation entails binding and attempts to connect to network services.
-    logger.debug('Before get_target()')
+    # environment. Creation provokes binding and attempts to connect to network services.
     t = env_with_docker_shell_strategy.get_target()
 
+    # So far no socket connect attempts were successful (actually expressed by what happens next)
     sock.shutdown.assert_not_called()
     sock.close.assert_not_called()
 
@@ -156,30 +146,10 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     logger.debug('Before get_driver()')
     strategy = t.get_driver("DockerShellStrategy")
 
-    # Strategy will call activate(), then on(); mock derived calls for each
-    # on_activate(), mock:
-    #   DockerClient.__init__()             - dockerdriver.py        -> use mocker.create_autospec()
-    #   _client.images.pull()               - dockerdriver.py
-    #   _client.api.create_container()      - dockerdriver.py
-    # on(), mock:
-    #   _client.api.start()                 - dockerdriver.py
-    #
-    # Then "command" fixture will bind and activate SSHDriver
-    # SSHDriver.super.__init__()
-    #   bind_resource()                     - target.py
-    # on_client_bound(), mock
-    #   target_factory.make_resource()      - docker.py
-    # on_poll(), mock:
-    #   _client.api.containers()            - docker.py
-    #   socket.create_connection()          - docker.py
-    #
-    # Finally, command.run will execute command on target and get results - but mock this?
-    #
-
     # strategy starts in state "unknown" so the following should be a no-op
     strategy.transition("unknown")
 
-    logger.debug('Before .transition("shell")')
+    # Then actual action happens. The strategy transition
     strategy.transition("shell")
 
     # Assert what mock calls transitioning to "shell" must have caused
@@ -200,23 +170,17 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     # to connect to the NetworkService which will lead to error.
     # So let's just use a mock that accepts anything.
 
-    logger.debug('Before t.update_resources()')
-    # The following is cheating to force t.update_resource() to take real action
-    logger.debug('Setting t.last_update to {lu}'.format(lu=t.last_update))
+    # Call t.update_resource() directly instead of trying to create e.g. an SSHDriver
+    # on top of the NetworkService which - in the case of SSHDriver - would lead
+    # to a real "ssh" trying to connect to the NetworkService. This wouldn't work
+    # (since the NetworkService isn't real) and really doesn't have to do with the
+    # docker driver implementation.
     t.update_resources()
-    #t.get_driver('CommandProtocol')
 
-    assert sock.shutdown.call_count == 3
-    assert sock.close.call_count == 3
-    #sock.shutdown.assert_called_once()
-    #sock.close.assert_called_once()
-
-
-    # TODO-ANGA: More assertions on what .transition("shell") did
-
-    # TODO-ANGA: Also describe what happens when a network_service is created
-
-    # TODO-ANGA: Also mock out socket module so test doesn't open real sockets
+    # This time socket connection was successful (per the third socket_create_connection
+    # return value defined above.
+    sock.shutdown.assert_called_once()
+    sock.close.assert_called_once()
 
     # Test what happens if taking a forbidden strategy transition; "shell" -> "unknown"
     from labgrid.strategy import StrategyError
@@ -227,6 +191,5 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     with pytest.raises(KeyError):
         strategy.transition("this is not a valid state")
 
+    # Return to "off" state - to also use that part of the DockerDriver code.
     strategy.transition("off")
-
-    print('hej')
