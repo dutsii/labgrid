@@ -1,5 +1,4 @@
 import pytest
-import docker_yaml
 
 from labgrid import Environment
 from labgrid.driver import DockerDriver
@@ -10,7 +9,22 @@ from labgrid.exceptions import NoResourceFoundError
 @pytest.fixture(scope='function')
 def env_with_docker_shell_strategy(tmp_path_factory, mocker):
     p = tmp_path_factory.mktemp("docker") / "config.yaml"
-    p.write_text(docker_yaml.yaml_no_ssh_driver)
+    p.write_text(
+        """
+        targets:
+          main:
+            resources:
+            - DockerDaemon:
+                docker_daemon_url: "unix:///var/run/docker.sock"
+            drivers:
+            - DockerDriver:
+                image_uri: "rastasheep/ubuntu-sshd:16.04"
+                container_name: "ubuntu-lg-example"
+                host_config: {"network_mode": "bridge"}
+                network_services: [{"port": 22, "username": "root", "password": "root"}]
+            - DockerShellStrategy: {}
+        """
+    )
     return Environment(str(p))
 
 
