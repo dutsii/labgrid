@@ -52,6 +52,7 @@ def target_with_docker_driver(env_with_docker_driver):
 
 @pytest.fixture(scope='function')
 def env_with_docker_shell_strategy(tmp_path_factory, mocker):
+    # TODO-ANGA: Move to test itself
     # Force target.py::update_resources() to take real action - always
     time_monotonic = mocker.patch('labgrid.target.monotonic')
     time_monotonic.side_effect = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
@@ -175,7 +176,9 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     # Finally, command.run will execute command on target and get results - but mock this?
     #
 
-    # The following is cheating to force t.update_resource() to take real action
+    # strategy starts in state "unknown" so the following should be a no-op
+    strategy.transition("unknown")
+
     logger.debug('Before .transition("shell")')
     strategy.transition("shell")
 
@@ -214,5 +217,16 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     # TODO-ANGA: Also describe what happens when a network_service is created
 
     # TODO-ANGA: Also mock out socket module so test doesn't open real sockets
+
+    # Test what happens if taking a forbidden strategy transition; "shell" -> "unknown"
+    from labgrid.strategy import StrategyError
+    with pytest.raises(StrategyError):
+        strategy.transition("unknown")
+
+    # How are invalid state names handled?
+    with pytest.raises(KeyError):
+        strategy.transition("this is not a valid state")
+
+    strategy.transition("off")
 
     print('hej')
