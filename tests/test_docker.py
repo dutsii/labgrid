@@ -36,12 +36,16 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     docker_client.api = api_client_class.return_value
     api_client = docker_client.api
     api_client.base_url = "unix:///var/run/docker.sock"
-    # First, an empty list is delivered by ...api.containers(); this is don when DockerDaemon tries
-    # to clean up old containers. Second, a one-item list is delivered by ...api.containers()
-    # which is part of DockerDaemon::update_resources() - it is cached for future use; therefore
-    # no need to replicate it.
+    # First, a "mocked" old docker container is returned by ...api.containers(); this is done
+    # when DockerDaemon tries to clean up old containers. Next, a one-item list is delivered by
+    # ...api.containers() which is part of DockerDaemon::update_resources() - it is cached
+    # for future use; therefore no need to replicate this entry in the side_effects list.
     api_client.containers.side_effect = [
-        [],
+        [{'Labels': {DockerConstants.DOCKER_LG_CLEANUP_LABEL: DockerConstants.DOCKER_LG_CLEANUP_TYPE_AUTO},
+          'NetworkSettings': {'IPAddress': '1.1.1.1'},
+          'Names': 'old-one',
+          'Id': '0'
+          }],
         [{'Labels': {DockerConstants.DOCKER_LG_CLEANUP_LABEL: DockerConstants.DOCKER_LG_CLEANUP_TYPE_AUTO},
           'NetworkSettings': {'IPAddress': '2.1.1.1'},
           'Names': 'actual-one',
@@ -60,16 +64,19 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
                                             Exception('No connection on second call'),
                                             sock]
 
-    # get_target() - which calls make_target() - creates resources/drivers from .yaml configured
-    # environment. Creation provokes binding and attempts to connect to network services.
+    # get_target() - which calls make_target() - creates resources/drivers from .yaml
+    # configured environment. Creation provokes binding and attempts to connect
+    # to network services.
+    api_client.remove_container.assert_not_called()
     t = env_with_docker_shell_strategy.get_target()
+    api_client.remove_container.assert_called_once()
 
     # Make sure DockerDriver didn't accidentally succeed with a socket connect attempt
     # (this fact is actually expressed by what happens next - the socket is closed).
     sock.shutdown.assert_not_called()
     sock.close.assert_not_called()
 
-    # Get strategy - needed to transition to "shell" state - which binds DockerDriver
+    # Get strategy - needed to transition to "shell" state.
     strategy = t.get_driver("DockerShellStrategy")
 
     # strategy starts in state "unknown" so the following should be a no-op
