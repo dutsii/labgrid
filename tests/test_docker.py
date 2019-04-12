@@ -135,7 +135,7 @@ def test_docker_without_daemon(docker_env, mocker):
     # to network services.
     api_client.remove_container.assert_not_called()
     t = docker_env.get_target()
-    api_client.remove_container.assert_called_once()
+    assert api_client.remove_container.call_count == 1
 
     # Make sure DockerDriver didn't accidentally succeed with a socket connect attempt
     # (this fact is actually expressed by what happens next - the socket is closed).
@@ -154,12 +154,12 @@ def test_docker_without_daemon(docker_env, mocker):
     # Assert what mock calls transitioning to "shell" must have caused
     #
     # DockerDriver::on_activate():
-    docker_client.images.pull.assert_called_once()
-    api_client.create_host_config.assert_called_once()
-    api_client.create_container.assert_called_once()
+    assert docker_client.images.pull.call_count == 1
+    assert api_client.create_host_config.call_count == 1
+    assert api_client.create_container.call_count == 1
     #
     # DockerDriver::on()
-    api_client.start.assert_called_once()
+    assert api_client.start.call_count == 1
 
     # From here the test using the real docker daemon would proceed with
     #   shell = t.get_driver('CommandProtocol')
@@ -173,8 +173,8 @@ def test_docker_without_daemon(docker_env, mocker):
 
     # This time socket connection was successful (per the third socket_create_connection
     # return value defined above).
-    sock.shutdown.assert_called_once()
-    sock.close.assert_called_once()
+    assert sock.shutdown.call_count == 1
+    assert sock.close.call_count == 1
 
     # Bonus: Test what happens if taking a forbidden strategy transition; "shell" -> "unknown"
     from labgrid.strategy import StrategyError
