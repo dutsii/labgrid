@@ -51,7 +51,11 @@ def target_with_docker_driver(env_with_docker_driver):
 
 
 @pytest.fixture(scope='function')
-def env_with_docker_shell_strategy(tmp_path_factory):
+def env_with_docker_shell_strategy(tmp_path_factory, mocker):
+    # Force target.py::update_resources() to take real action - always
+    time_monotonic = mocker.patch('labgrid.target.monotonic')
+    time_monotonic.side_effect = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+
     p = tmp_path_factory.mktemp("docker") / "config.yaml"
     p.write_text(docker_yaml.yaml_all)
     return Environment(str(p))
@@ -116,7 +120,7 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
         #   #'NetworkSettings': {'IPAddress': '1.1.1.1'},
         #   'Names': 'left-over',
         #   'Id': '42'}],
-        [], [],
+        [],
         [{'Labels': {DockerConstants.DOCKER_LG_CLEANUP_LABEL: DockerConstants.DOCKER_LG_CLEANUP_TYPE_AUTO},
           'NetworkSettings': {'IPAddress': '2.1.1.1'},
           'Names': 'actual-one',
@@ -135,7 +139,9 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     # TODO-ANGA: Instead just let socket creation succeed
     socket_create_connection.return_value = sock
 
+    # TODO-ANGA: Do we actually use this mock for anything? Probably not
     mocker.patch('labgrid.driver.SSHDriver', autospec=True)
+
 
     # get_target() - which calls make_target() - creates resources/drivers from .yaml configured
     # environment. Creation entails binding and attempts to connect to network services.
@@ -170,8 +176,6 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     #
 
     # The following is cheating to force t.update_resource() to take real action
-    import time
-    t.last_update = time.monotonic() - 0.5
     logger.debug('Before .transition("shell")')
     strategy.transition("shell")
 
@@ -195,14 +199,14 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
 
     logger.debug('Before t.update_resources()')
     # The following is cheating to force t.update_resource() to take real action
-    import time
-    t.last_update = time.monotonic() - 0.5
     logger.debug('Setting t.last_update to {lu}'.format(lu=t.last_update))
     t.update_resources()
     #t.get_driver('CommandProtocol')
 
-    sock.shutdown.assert_called_once()
-    sock.close.assert_called_once()
+    assert sock.shutdown.call_count == 3
+    assert sock.close.call_count == 3
+    #sock.shutdown.assert_called_once()
+    #sock.close.assert_called_once()
 
 
     # TODO-ANGA: More assertions on what .transition("shell") did
