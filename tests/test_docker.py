@@ -6,9 +6,11 @@ from labgrid.resource.docker import DockerConstants
 from labgrid.exceptions import NoResourceFoundError
 
 
-@pytest.fixture(scope='function')
-def env_with_docker_shell_strategy(tmp_path_factory, mocker):
+@pytest.fixture
+def docker_env(tmp_path_factory):
     p = tmp_path_factory.mktemp("docker") / "config.yaml"
+    # Note: The SSHDriver part at bottom is only used by the test that will run
+    # if a docker daemon is present, not by test_driver_without_daemon
     p.write_text(
         """
         targets:
@@ -23,9 +25,38 @@ def env_with_docker_shell_strategy(tmp_path_factory, mocker):
                 host_config: {"network_mode": "bridge"}
                 network_services: [{"port": 22, "username": "root", "password": "root"}]
             - DockerShellStrategy: {}
+            - SSHDriver:
+                keyfile: ""
         """
     )
     return Environment(str(p))
+
+
+@pytest.fixture
+def docker_target(docker_env):
+    return docker_env.get_target()
+
+
+@pytest.fixture
+def command(docker_target):
+    strategy = docker_target.get_driver('DockerShellStrategy')
+    strategy.transition("shell")
+    shell = docker_target.get_driver('CommandProtocol')
+    yield shell
+    strategy.transition("off")
+
+
+def test_shell(command):
+    stdout, stderr, returncode = command.run('cat /proc/version')
+    assert returncode == 0
+    assert len(stdout) > 0
+    assert len(stderr) == 0
+    assert 'Linux' in stdout[0]
+
+    stdout, stderr, returncode = command.run('false')
+    assert returncode != 0
+    assert len(stdout) == 0
+    assert len(stderr) == 0
 
 
 def test_create_driver_fail_missing_docker_daemon(target):
@@ -34,8 +65,14 @@ def test_create_driver_fail_missing_docker_daemon(target):
         DockerDriver(target, "docker_driver")
 
 
-def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
-    """Test activation of DockerDriver instance and subsequent invocation of on() and use of network_service"""
+def test_driver_without_daemon(docker_env, mocker):
+    """Test as many aspects as possible of DockerDriver, DockerDaemon, DockerManager
+    and DockerShellStrategy without using an actual docker daemon, real sockets of system time"""
+
+    # TODO-ANGA: This must be better understood. Provide better explanation!
+    # Fake: In real life ResourceManager is intended to be a singleton; here we force it to start over again
+    from labgrid.resource import ResourceManager
+    ResourceManager.instances = {}
 
     # Target::update_resources() and Target::await_resources use time.monotonic() and
     # time.sleep() to control when to search for resources. Avoid time delays and make
@@ -82,7 +119,7 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
     # configured environment. Creation provokes binding and attempts to connect
     # to network services.
     api_client.remove_container.assert_not_called()
-    t = env_with_docker_shell_strategy.get_target()
+    t = docker_env.get_target()
     api_client.remove_container.assert_called_once()
 
     # Make sure DockerDriver didn't accidentally succeed with a socket connect attempt
