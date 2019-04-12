@@ -135,3 +135,5 @@ def test_driver_use_network_service(env_with_docker_shell_strategy, mocker):
 
     # Return to "off" state - to also use that part of the DockerDriver code.
     strategy.transition("off")
+    from labgrid.strategy.shellstrategy import Status
+    assert strategy.status == Status.off
