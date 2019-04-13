@@ -44,7 +44,20 @@ def docker_env(tmp_path_factory):
 
 @pytest.fixture
 def docker_target(docker_env):
-    return docker_env.get_target()
+    t = docker_env.get_target()
+    yield t
+
+    # Fake! In real life, ResourceManager is intended to be a singleton. The class is created
+    # only once - when python parses common.py. But this means that the class with its
+    # "instances" attribute survives from test case to test case. This is not what we want.
+    # In contrast we want each of test_docker_with_daemon and test_docker_without_daemon
+    # to run with a *fresh* instance of the ResourceManager singleton.
+    #
+    # Luckily it is easy to "reset" ResourceManager. The singleton is kept in attribute "instances"
+    # so by resetting "instances" to {}, next test case will force creation of
+    # a fresh ResourceManager instance.
+    from labgrid.resource import ResourceManager
+    ResourceManager.instances = {}
 
 
 @pytest.fixture
@@ -72,22 +85,19 @@ def test_docker_with_daemon(command):
     assert len(stdout) == 0
     assert len(stderr) == 0
 
+
 # Just a very basic test for proper failure on illegal configuration.
 def test_create_driver_fail_missing_docker_daemon(target):
     """The test target does not contain any DockerDaemon instance - and so creation must fail"""
     with pytest.raises(NoResourceFoundError):
         DockerDriver(target, "docker_driver")
 
+
 # This test simulates actions in test_docker_with_daemon, but with mocks inserted for
 # operations provided by the python docker module, the python socket module - and time.
 def test_docker_without_daemon(docker_env, mocker):
     """Test as many aspects as possible of DockerDriver, DockerDaemon, DockerManager
     and DockerShellStrategy without using an actual docker daemon, real sockets of system time"""
-
-    # TODO-ANGA: This must be better understood. Provide better explanation!
-    # Fake: In real life ResourceManager is intended to be a singleton; here we force it to start over again
-    from labgrid.resource import ResourceManager
-    ResourceManager.instances = {}
 
     # Target::update_resources() and Target::await_resources use time.monotonic() and
     # time.sleep() to control when to search for resources. Avoid time delays and make
