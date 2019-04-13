@@ -122,7 +122,6 @@ class SSHDriver(CommandMixin, Driver, CommandProtocol, FileTransferProtocol):
             prefix=self.ssh_prefix,
             port=self.networkservice.port
         ).split(' ')
-        self.logger.debug("Sending command: %s", complete_cmd)
         if self.stderr_merge:
             stderr_pipe = subprocess.STDOUT
         else:
