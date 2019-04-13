@@ -1,3 +1,7 @@
+"""
+Class for connecting to a docker daemon running on the host machine.
+"""
+
 import attr
 import logging
 
@@ -10,15 +14,14 @@ from labgrid.protocol.powerprotocol import PowerProtocol
 @target_factory.reg_driver
 @attr.s(cmp=False)
 class DockerDriver(PowerProtocol, Driver):
-    """
-    The DockerDriver is used to create docker containers.
+    """The DockerDriver is used to create docker containers.
     This is done via communication with a docker daemon.
 
-    When a container is created the container is labeled with an cleanup
-    strategy identifier. Currently only one strategy is implemented.
-    This strategy simply deletes all labgrid created containers before each
-    test run. This is to ensure cleanup of dangling containers from crashed
-    tests or hanging containers.
+    When a container is created the container is labeled with an
+    cleanup strategy identifier. Currently only one strategy is
+    implemented.  This strategy simply deletes all labgrid created
+    containers before each test run. This is to ensure cleanup of
+    dangling containers from crashed tests or hanging containers.
 
     Image pruning is not done by the driver.
 
@@ -36,6 +39,7 @@ class DockerDriver(PowerProtocol, Driver):
         host_config (dict): Docker host configuration parameters
         network_services (list): Sequence of dicts each specifying a network \
                                  service that the docker container exposes.
+
     """
     bindings = {"docker_daemon": {DockerDaemon}}
     image_uri = attr.ib(default=None, validator=attr.validators.optional(
@@ -65,7 +69,8 @@ class DockerDriver(PowerProtocol, Driver):
     def on_activate(self):
         """
         On activation:
-        1. Import docker module "lazily" (_client and _container remain available)
+        1. Import docker module "lazily"
+           (_client and _container remain available)
         2. Connect to the docker daemon
         3. Pull requested image from docker registry if needed
         4. Create the new container according to parameters from conf
