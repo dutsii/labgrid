@@ -136,9 +136,6 @@ class DockerDaemon(ManagedResource):
                         nw_service.address = find_dict(
                             d=container[0]['NetworkSettings'],
                             key='IPAddress')
-                        self.log.debug("setting ip address %s for target %s",
-                                       nw_service.address,
-                                       nw_service.target.name)
                 if (nw_service.address != "" and
                         self._socket_connect(nw_service.address,
                                              nw_service.port)):
@@ -155,12 +152,8 @@ class DockerDaemon(ManagedResource):
         """
         try:
             s = socket.create_connection((address, port))
-        except Exception as e:
-            self.log.debug(
-                "Socket connect failed {}:{} - {}".format(address, port, e))
+        except Exception:
             return False
         s.shutdown(socket.SHUT_RDWR)
         s.close()
-        self.log.debug(
-            "Socket connect successful {}:{}".format(address, port))
         return True
