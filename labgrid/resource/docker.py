@@ -143,7 +143,8 @@ class DockerDaemon(ManagedResource):
                 else:
                     nw_service.avail = False
 
-    def _socket_connect(self, address, port):
+    @staticmethod
+    def _socket_connect(address, port):
         """
         Try to do a socket connect
         :param address: The ip address to connect to
